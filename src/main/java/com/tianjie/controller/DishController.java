@@ -13,12 +13,14 @@ import com.tianjie.service.DishFlavorService;
 import com.tianjie.service.DishService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /*
@@ -35,6 +37,9 @@ public class DishController {
 
     @Autowired
     private DishFlavorService dishFlavorService;
+
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     @PostMapping
     public R<String> save(@RequestBody DishDto dishDto){
@@ -123,13 +128,19 @@ public class DishController {
     @GetMapping("/list")
     public R<List<DishDto>> list(Dish dish){
 
+            String key = dish.getCategoryId()+"_1";
+             List<DishDto> dishDtoList = null;
+            dishDtoList = (List<DishDto>) redisTemplate.opsForValue().get(key);
+            if(dishDtoList != null){
+                return R.success(dishDtoList);
+            }
             LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.eq(dish.getCategoryId() != null,Dish::getCategoryId,dish.getCategoryId());
             queryWrapper.eq(Dish::getStatus,1);
             queryWrapper.like(dish.getName() != null,Dish::getName,dish.getName());
             queryWrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
             List<Dish> dishes = dishService.list(queryWrapper);
-            List<DishDto> dishDtoList = dishes.stream().map(item ->{
+            dishDtoList = dishes.stream().map(item ->{
                 DishDto dishDto = new DishDto();
                 BeanUtils.copyProperties(item,dishDto);
                 LambdaQueryWrapper<DishFlavor> queryWrapper1 = new LambdaQueryWrapper<>();
@@ -138,6 +149,7 @@ public class DishController {
                 dishDto.setFlavors(dishFlavors);
                 return dishDto;
             }).toList();
+            redisTemplate.opsForValue().set(key,dishDtoList,60, TimeUnit.MINUTES);
             return R.success(dishDtoList);
     }
 }
