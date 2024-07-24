@@ -11,9 +11,11 @@ target/
 *.iws
 *.iml
 *.ipr
+
 .gitignore
 .idea
 pom.xml
+
 ### Eclipse ###
 .apt_generated
 .classpath
